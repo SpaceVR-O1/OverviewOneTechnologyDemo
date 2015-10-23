@@ -37,7 +37,10 @@
  ***************************************************************************/
  enum
  {
-   DEBUG = 1,                     //Change to 0 to turn OFF debug statments 
+   DEBUG = 1,                     //Change to 0 to turn OFF debug statments
+   X_AXIS_INDEX = 0,
+   Y_AXIS_INDEX = 1,
+   Z_AXIS_INDEX = 2,  
    SHORT_BUTTON_PRESS = 1,
    LONG_BUTTON_PRESS = 2,
    BUTTON_DEPRESS_MS_RESOLUTION = 10 //Software button debounce of 10 ms                           
@@ -46,16 +49,19 @@
 
 /***************************************************************************
  HARDWARE PIN CONFIGURATION CONSTANTS
- Arduino Pro Mini 3.3V / 16 MHz ATmega328 pin configuration
+ Arduino Pro Mini 3.3V / 16 MHz ATmega328 and Esplora pin configuration
  ***************************************************************************/
  enum
  {
-   CUTDOWN_PIN = 2,         //D2
-   BUTTON_1_PIN = 5,        //D5
-   BUTTON_2_PIN = 6,        //D6
-   BUTTON_3_PIN = 7,        //D7
-   BUTTON_4_PIN = 8,        //D8
-   HEATSINK_HEATER_PIN = 9  //D9
+   PRO_MINI_CUTDOWN_PIN = 2,         //D2 
+   PRO_MINI_BUTTON_1_PIN = 5,        //D5
+   PRO_MINI_BUTTON_2_PIN = 6,        //D6
+   PRO_MINI_BUTTON_3_PIN = 7,        //D7
+   PRO_MINI_BUTTON_4_PIN = 8,        //D8
+   PRO_MINI_HEATSINK_HEATER_PIN = 9, //D9
+   ESPLORA_CUTDOWN_PIN = 3,          //D3
+   ESPLORA_HEATSINK_HEATER_PIN = 4   //D4       
+  
 }; //END ENUM 
 
 /***************************************************************************
@@ -66,13 +72,13 @@
    BALLOON_HY_1600_100_000_FEET = 5379,
    BALLOON_HY_1600_75_000_FEET  = 4034,  
    BALLOON_HY_1600_X_50_000_FEET  = 2689, 
-   SEA_LEVEL_PRESSURE = 1022               // hPa                         
+   SEA_LEVEL_PRESSURE = 1022,               // hPa 
+   TARGET_MIN_TEMPERATURE =  0              // degrees C                       
 }; //END ENUM 
 
 /***************************************************************************
  GLOBAL VARIABLES
  ***************************************************************************/
-float currentTemperature;
 int EEPROM_AddressPointer;         // Points to next memory location to write to
 
 /***************************************************************************
@@ -110,7 +116,8 @@ StopWatch SWarray[5];                      // Defaults to milliseconds
 void startCutDownTimer(void)
 {
   SW_CutDown.start();
-  Esplora.writeRGB(0, 255, 0); //Turn RGB LED ON and make green 
+  Esplora.writeRGB(0, 255, 0); //Turn RGB LED ON and make green
+  Esplora.tone(50, 2000);  
 }
 
 /*!
@@ -141,6 +148,27 @@ unsigned long getCutDownTimerValue(void)
 }
 
 /*!
+ * @brief Get acceleration (in G's) of payload in the in X Y and Z direction in the form of array. 
+ * 
+ * @details The functions requests data from the YEI 3-Space IMU (Positive = up / Negative = down)
+ * 
+ * @return and array of 1. The acceleration along the Z -axis G's 0 to 3. 
+ *                      2. The acceleration along the Y -axis
+ *                      3. The acceleration along the X -axis
+ */
+float getAccelerometerData(void)
+{
+  float axisValues[3];
+  
+  axisValues[X_AXIS_INDEX] = Esplora.readAccelerometer(X_AXIS);
+  axisValues[Y_AXIS_INDEX] = Esplora.readAccelerometer(Y_AXIS);
+  axisValues[Z_AXIS_INDEX] = Esplora.readAccelerometer(Z_AXIS);
+  
+  return axisValues[3];
+ 
+}
+
+/*!
  * @brief Give command to cut down balloon 
  * 
  * @details This functions continues to try an cut down the balloon 
@@ -148,16 +176,18 @@ unsigned long getCutDownTimerValue(void)
  */
 void cutDownBalloon(void)
 {
-  digitalWrite(CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q2
+  digitalWrite(ESPLORA_CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q2
   
   bool isPayloadFalling = false;
   
   while(!isPayloadFalling){
     //CHECK ACCELEROMETER Z AXIS HERE???
-    if(getAccelerometerZaxis() > 0){
+    float data[3] ={0, 0, 0};
+    data[3] = getAccelerometerData();
+    if(data[Z_AXIS_INDEX] > 0){
       isPayloadFalling = false;
       delay(10000);
-      digitalWrite(CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q1   
+      digitalWrite(ESPLORA_CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q1   
     }
     else{
      isPayloadFalling = true; 
@@ -166,21 +196,6 @@ void cutDownBalloon(void)
   }//END WHILE LOOP
 }//END cutDownBalloon() FUNCTION
 
-
-/*!
- * @brief Get acceleration (in G's) of payload in the Z direction. 
- * 
- * @details The functions requests data from the YEI 3-Space IMU (Positive = up / Negative = down)
- * 
- * @return The acceleration along the Z -axis G's 0 to 3.
- */
-float getAccelerometerZaxis(void)
-{
-  float ZaxisValue;
-  //TO-DO???
-  return ZaxisValue;
-}
-
 /*!
  * @brief Store temperture (degrees Celsius), Pressure (kPa), and altitude (m) in 1 KB EEPROM.
  * 
@@ -188,72 +203,42 @@ float getAccelerometerZaxis(void)
  * 
  * @return Nothing
  */
-void LogData(void)
-{
-  //Do we want to write to 32KB Flash program memory instead? https://www.arduino.cc/en/Reference/PROGMEM
-
-  Esplora.writeRGB(0, 0, 255); //Turn RGB LED ON and make blue
-
-  /* Get a new sensor event */ 
-  sensors_event_t event;
-  bmp.getEvent(&event);
-  
-  float temperature, pressure, altitude;
- 
-  bmp.getTemperature(&temperature);
-  bmp.getPressure(&pressure);
-  altitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure); 
-
-  byte value;
-
+bool LogData(float currentTemperature, float currentPressure, float currentAltitude)
+{ 
   if (EEPROM_AddressPointer == EEPROM.length()) { // Memory pointer has overflowed
     if(DEBUG) Serial.println("ERROR! EEPROM full, please enter another quater.");
     EEPROM.write(0, -1);         // Write -1 to EEMPROM address 0 to note overflow
-    return;
+    return false;
   }  
 
   // Details on EEPROM.put() funtion https://www.arduino.cc/en/Reference/EEPROMPut
-  EEPROM.put(EEPROM_AddressPointer, temperature);
+  EEPROM.put(EEPROM_AddressPointer, currentTemperature);
   EEPROM_AddressPointer++;
-  EEPROM.put(EEPROM_AddressPointer, pressure);
+  EEPROM.put(EEPROM_AddressPointer, currentPressure);
   EEPROM_AddressPointer++;
-  EEPROM.put(EEPROM_AddressPointer, altitude);
+  EEPROM.put(EEPROM_AddressPointer, currentAltitude);
   EEPROM_AddressPointer++;
+
+  Esplora.writeRGB(0, 0, 255); //Turn RGB LED ON and make blue
+  return true;
 }
 
-/*!
- * @brief STOP storing temperture (degrees Celsius), Pressure (kPa), and altitude (m) in EEPROM.
- */
-void stopLoggingData(void)
-{
-  Esplora.writeRGB(0, 0, 0); //Turn RGB LED OFF
-}
-
-/*!
- * @brief Turn on the required thermal control system.
- * @param Input temperature reading from sensor.
- */
-void startThermalControlSystem(int temperature)
-{
-  //TURN LED 3 ON???
-  if(checkThermalControlSystem(temperature)){
-    // Turn on Heater  
-    // digitalWrite(heatsink_HeaterPin, HIGH);   // Turn on MOSFET Q2 
-  }
-  else{
-    // Turn off heater and allow heat sink to cool system
-      
-  }
-}
 
 /*!
  * @brief Deterime which thermal system to turn and engage.
+ * 
  * @param Input temperature reading from sensor.
- * @return True if heating system was turned on - False otherwise
+ * 
+ * @return Nothing
  */
-bool checkThermalControlSystem(int temperature)
+void adjustThermalControlSystem(int currentTemperature)
 {
-  
+  if(currentTemperature < TARGET_MIN_TEMPERATURE){
+    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, HIGH);   // Turn ON MOSFET Q1 and heater  
+  }
+  else{
+    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics    
+  }
 }
 
 /*!
@@ -261,7 +246,7 @@ bool checkThermalControlSystem(int temperature)
  */
 void stopThermalControlSystem()
 {
-   //TURN LED 3 OFF??? 
+  digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
 }
 
 /*!
@@ -274,7 +259,7 @@ void stopThermalControlSystem()
  * 
  * @returns 2 for long button hold, 1 for short buton hold, and loops for no button press
  */  
-int getButtonState(int pin)
+int getProMiniButtonState(int pin)
 {
   bool buttonPressCaptured = false;
   unsigned long ButtonDepressTimeMS = 0;
@@ -306,16 +291,16 @@ int getButtonState(int pin)
     }//END OUTER IF
 
     switch(pin){
-      case BUTTON_1_PIN:
+      case SWITCH_UP: //BUTTON_1_PIN:
         Serial.println("Please push button 1 to begin cut down timer.");
         break;
-      case BUTTON_2_PIN:
+      case SWITCH_RIGHT: //BUTTON_2_PIN:
         Serial.println("Please push button 2 to begin data logging.");
         break;
-      case BUTTON_3_PIN:
+      case SWITCH_DOWN: //BUTTON_3_PIN:
         Serial.println("Please push button 3 to start thermal control system.");
         break;
-      case BUTTON_4_PIN:
+      case SWITCH_LEFT: //BUTTON_4_PIN:
         Serial.println("Please push button 4 to stop thermal control system.");
         break;
       default:
@@ -428,21 +413,20 @@ void unitTest(void)
 void setup(void) 
 {
    // Set digital pins as outputs.
-   pinMode(CUTDOWN_PIN, OUTPUT);  
-   pinMode(HEATSINK_HEATER_PIN, OUTPUT);
+   pinMode(ESPLORA_CUTDOWN_PIN, OUTPUT);  
+   pinMode(ESPLORA_HEATSINK_HEATER_PIN, OUTPUT);
 
-   // Set the digital pins as inputs.
-   pinMode(BUTTON_1_PIN, INPUT);
-   pinMode(BUTTON_2_PIN, INPUT);
-   pinMode(BUTTON_3_PIN, INPUT);
-   pinMode(BUTTON_4_PIN, INPUT);
+   // Set the Pro Mini digital pins as inputs.
+   //pinMode(BUTTON_1_PIN, INPUT);
+   //pinMode(BUTTON_2_PIN, INPUT);
+   //pinMode(BUTTON_3_PIN, INPUT);
+   //pinMode(BUTTON_4_PIN, INPUT);
   
   Serial.begin(9600);
   if(DEBUG) Serial.println("Overview One BMP085 Sensor Connection Test"); 
   if(DEBUG) Serial.println("");
 
   // Initialize global variables 
-  currentTemperature = 0;
   EEPROM_AddressPointer = 0;
 
   /* Initialise the sensor */
@@ -459,7 +443,13 @@ void setup(void)
 
 
 void loop(void) 
-{
+{ 
+  /* Get a new sensor event */ 
+  sensors_event_t event;
+  bmp.getEvent(&event);  
+  float currentTemperature, currentPressure, currentAltitude;
+  bool ok = false;                       // System status flag
+  
   if(DEBUG){
     unitTest();
     Serial.println("Overview One BMP085 Sensor Connection Test PASSED"); 
@@ -467,33 +457,51 @@ void loop(void)
   }
 
   Serial.println("Push Button 1 to begin timer.");
-  if(getButtonState(BUTTON_1_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 1 is pressed
+  if(!Esplora.readButton(SWITCH_1)){
+  //if(getProMiniButtonState(BUTTON_1_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 1 is pressed
     startCutDownTimer();   
   }
 
   Serial.println("Push Button 2 to begin data logging.");
-  if(getButtonState(BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed
-    LogData();   
+  if(!Esplora.readButton(SWITCH_2)){
+  //if(getProMiniButtonState(BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed
+    bmp.getTemperature(&currentTemperature);
+    bmp.getPressure(&currentPressure);
+    currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
+    ok &= LogData(currentTemperature, currentPressure, currentAltitude);  
   }
 
   Serial.println("Push button 3 to start thermal control system.");
-  if(getButtonState(BUTTON_3_PIN) == LONG_BUTTON_PRESS){ //Loops until button 3 is pressed
+  if(!Esplora.readButton(SWITCH_3)){
+  //if(getProMiniButtonState(BUTTON_3_PIN) == LONG_BUTTON_PRESS){ //Loops until button 3 is pressed
     bmp.getTemperature(&currentTemperature);
-    startThermalControlSystem(currentTemperature);   
+    adjustThermalControlSystem(currentTemperature);   
   }
 
   while(getCutDownTimerValue() < BALLOON_HY_1600_100_000_FEET){
     // Loop every 100 secondsuntil timer reaches set cut down time 
     // Do OTHER stuff here while in flight
-    LogData(); 
+    bmp.getTemperature(&currentTemperature);
+    bmp.getPressure(&currentPressure);
+    currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
+    ok &= LogData(currentTemperature, currentPressure, currentAltitude);  
     delay(100000);
   }
 
   cutDownBalloon(); 
 
   Serial.println("Push button 4 to stop thermal control system.");
-  if(getButtonState(BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed
+  if(!Esplora.readButton(SWITCH_4)){
+  //if(getProMiniButtonState(BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed
     stopThermalControlSystem();  
+  }
+
+  //Status LED at end of flight Red = BAD / Green = GOOD
+  if(ok){
+    Esplora.writeRGB(0, 255, 0); //Turn RGB LED ON and make green   
+  }
+  else{
+    Esplora.writeRGB(255, 0, 0); //Turn RGB LED ON and make red   
   }
     
 }//END MAIN LOOP
