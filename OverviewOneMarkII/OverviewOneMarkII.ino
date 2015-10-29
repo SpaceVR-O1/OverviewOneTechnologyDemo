@@ -42,6 +42,7 @@ enum
   ESPLORA = 1,
   PRO_MINI = 2,
   NANO = 3,
+  UNO = 4,
   X_AXIS_INDEX = 0,
   Y_AXIS_INDEX = 1,
   Z_AXIS_INDEX = 2,  
@@ -58,13 +59,40 @@ enum
  ***************************************************************************/
 enum
 {
-
+  // The Arduino Nano, Uno, and Pro Mini use the following:
+  // Outputs: D2 and D9
+  // Inputs: D5, D6, D7, D8,
+  
+  NANO_CUTDOWN_PIN = 2,
+  NANO_BUTTON_1_PIN = 5,
+  NANO_BUTTON_2_PIN = 6,
+  NANO_BUTTON_3_PIN = 7,
+  NANO_BUTTON_4_PIN = 8,
+  NANO_HEATSINK_HEATER_PIN = 9,
+  
+  UNO_CUTDOWN_PIN = 2,
+  UNO_BUTTON_1_PIN = 5,
+  UNO_BUTTON_2_PIN = 6,
+  UNO_BUTTON_3_PIN = 7,
+  UNO_BUTTON_4_PIN = 8,
+  UNO_HEATSINK_HEATER_PIN = 9,
+  
   PRO_MINI_CUTDOWN_PIN = 2,         //D2 
   PRO_MINI_BUTTON_1_PIN = 5,        //D5
   PRO_MINI_BUTTON_2_PIN = 6,        //D6
   PRO_MINI_BUTTON_3_PIN = 7,        //D7
   PRO_MINI_BUTTON_4_PIN = 8,        //D8
   PRO_MINI_HEATSINK_HEATER_PIN = 9, //D9
+
+
+  // The Arduino Esplora uses the following:
+  // Outputs: D3 and D4
+  // Inputs: Built in buttons 
+  //         > Esplora.readButton(SWITCH_1)
+  //         > Esplora.readButton(SWITCH_2)
+  //         > Esplora.readButton(SWITCH_3)
+  //         > Esplora.readButton(SWITCH_4)
+  
   ESPLORA_CUTDOWN_PIN = 3,          //D3
   ESPLORA_HEATSINK_HEATER_PIN = 4   //D4       
 
@@ -91,6 +119,11 @@ enum
  ***************************************************************************/
 int EEPROM_AddressPointer;         // Points to next memory location to write to
 
+struct MyObject {
+  float field1;
+  byte field2;
+  char name[10];
+};
 
 
 
@@ -451,17 +484,48 @@ void unitTest(void)
 
 
 
-void waitForNextEsploraButton(int lastButtonPressed
+void waitForNextEsploraButton(int lastButtonPressed)
 {
+  bool nextButtonPressed = false;
+  
   while(!nextButtonPressed){
-    //TO-DO
-    Esplora.writeRGB(0, 255, 0); 
-      if(!Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
-        nextButtonPressed = true;
-      }//END IF
-    }//END WHILE LOOP
-    nextButtonPressed = false; 
-    
+    switch(lastButtonPressed){
+      case SWITCH_1: //BUTTON_1_PIN:
+        if (DEBUG) Serial.println("Button 1 was pressed last. Please press button 2 next.");
+        Esplora.writeRGB(0, 255, 0); 
+          if(!Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+            nextButtonPressed = true;
+        }//END IF
+        break;
+      case SWITCH_2: //BUTTON_2_PIN:
+        if (DEBUG) Serial.println("Button 2 was pressed last. Please press button 3 next.");
+        Esplora.writeRGB(0, 0, 255); 
+          if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+            nextButtonPressed = true;
+        }//END IF
+        break;
+      case SWITCH_3: //BUTTON_3_PIN:
+        if (DEBUG) Serial.println("Button 3 was pressed last. Please press button 4 next.");
+        Esplora.writeRGB(255, 0, 0); 
+          if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
+            nextButtonPressed = true;
+        }//END IF
+        break;
+      case SWITCH_4: //BUTTON_4_PIN:
+        if (DEBUG) Serial.println("Button 4 was pressed last. Have a nice day.");
+        Esplora.writeRGB(255, 0, 0); 
+          if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_3))){
+            nextButtonPressed = true;
+        }//END IF
+      default:
+        Serial.println("ERROR! You have too many buttons on your Esplora Dev Kit :)");
+        break;
+   }//END SWITCH
+
+   delay(500); // Slow down print statements
+   
+ }//END WHILE LOOP
+        
 }//END waitForNextEsploraButton() functions
 
 /*!
@@ -482,10 +546,10 @@ void selectHardwareConfiguration(int arduinoBoardName)
       break;
     case PRO_MINI: //BUTTON_2_PIN:
       if (DEBUG) Serial.println("Arduino Pro Mini selected.");
-      pinMode(BUTTON_1_PIN, INPUT);
-      pinMode(BUTTON_2_PIN, INPUT);
-      pinMode(BUTTON_3_PIN, INPUT);
-      pinMode(BUTTON_4_PIN, INPUT);
+      pinMode(PRO_MINI_BUTTON_1_PIN, INPUT);
+      pinMode(PRO_MINI_BUTTON_2_PIN, INPUT);
+      pinMode(PRO_MINI_BUTTON_3_PIN, INPUT);
+      pinMode(PRO_MINI_BUTTON_4_PIN, INPUT);
       break;
     case NANO: //BUTTON_3_PIN:
       if (DEBUG) Serial.println("Arduino Nano selected.");
@@ -579,19 +643,21 @@ void loop(void)
   if(!Esplora.readButton(SWITCH_3)){ //if(getProMiniButtonState(BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed
 
     while(getCutDownTimerValue() < BALLOON_HY_1600_100_000_FEET){
-      // Loop every 100 secondsuntil timer reaches set cut down time 
-      // Do OTHER stuff here while in flight
-      adjustThermalControlSystem();
+      // Loop every 100 seconds until timer reaches set cut down time 
+      // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
       
       bmp.getTemperature(&currentTemperature);
       bmp.getPressure(&currentPressure);
       currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
+      
+      adjustThermalControlSystem(currentTemperature);
       ok &= LogData(currentTemperature, currentPressure, currentAltitude);  
     
       // Pause 100 seconds for data logging, but update thermal control system every 1 second
       for (int sec = 0; sec < 100; sec++){
         delay(1000); 
-        adjustThermalControlSystem();
+        bmp.getTemperature(&currentTemperature);
+        adjustThermalControlSystem(currentTemperature);
       }//END FOR LOOP
 
     }//END WHILE LOOP
