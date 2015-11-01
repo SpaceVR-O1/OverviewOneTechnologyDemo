@@ -46,6 +46,7 @@ enum
   X_AXIS_INDEX = 0,
   Y_AXIS_INDEX = 1,
   Z_AXIS_INDEX = 2,  
+  NO_BUTTON = 0,
   SHORT_BUTTON_PRESS = 1,
   LONG_BUTTON_PRESS = 2,
   BUTTON_DEPRESS_MS_RESOLUTION = 10 //Software button debounce of 10 ms    
@@ -55,7 +56,9 @@ enum
 
 /***************************************************************************
  * HARDWARE PIN CONFIGURATION CONSTANTS
- * Arduino Pro Mini 3.3V / 16 MHz ATmega328 and Esplora pin configuration
+ * Arduino Pro Mini 5V/16 MHz ATmega328, Esplora 5V/16 MHz ATmega32u4, 
+ * Nano 5V/16 MHz ATmega328, & Uno 5V/16 MHz ATmega16U2 pin configuration
+ * @see https://www.arduino.cc/en/Main/Products
  ***************************************************************************/
 enum
 {
@@ -119,7 +122,7 @@ enum
  ***************************************************************************/
 int EEPROM_AddressPointer;         // Points to next memory location to write to
 
-struct MyObject {
+struct MyObject {                  // EEPROM.put() test structure 
   float field1;
   byte field2;
   char name[10];
@@ -169,6 +172,15 @@ StopWatch SWarray[5];                      // Defaults to milliseconds
 
 /*!
  * @brief START running timer.
+ * 
+ * @detail This timer is used to cutdown the balloon after a set time. 
+ * This stops the balloon from being carried to far away by the jet stream.
+ * 
+ * @see http://playground.arduino.cc/Code/StopWatchClass
+ * 
+ * @param NONE
+ * 
+ * @return NOTHING
  */
 void startCutDownTimer(void)
 {
@@ -179,7 +191,14 @@ void startCutDownTimer(void)
 
 /*!
  * @brief STOP timer until restartCutDownTimer() or startCutDownTimer() function is called.
- *
+ * 
+ * @detail This timer is used to cutdown the balloon after a set time. 
+ * This stops the balloon from being carried to far away by the jet stream.
+ * 
+ * @see http://playground.arduino.cc/Code/StopWatchClass
+ * 
+ * @param NONE
+ * 
  * @return NOTHING
  */
 void stopCutDownTimer(void)
@@ -190,8 +209,15 @@ void stopCutDownTimer(void)
 }//END stopCutDownTimer() FUNCTION
 
 /*!
- * @brief Reset timer to zero seconds and .
- *
+ * @brief Reset timer to zero seconds and keep timer running.
+ * 
+ * @detail This timer is used to cutdown the balloon after a set time. 
+ * This stops the balloon from being carried to far away by the jet stream.
+ * 
+ * @see http://playground.arduino.cc/Code/StopWatchClass
+ * 
+ * @param NONE
+ * 
  * @return NOTHING
  */
 void restartCutDownTimer(void)
@@ -202,9 +228,16 @@ void restartCutDownTimer(void)
 }//END restartCutDownTimer() FUNCTION
 
 /*!
- * @brief Get current length timer has run for in seconds
- *
- * @return The current cutdown timer value (Overflows after 49.7 days)
+ * @brief Get current length timer has run for in seconds.
+ * 
+ * @detail This timer is used to cutdown the balloon after a set time. 
+ * This stops the balloon from being carried to far away by the jet stream.
+ * 
+ * @see http://playground.arduino.cc/Code/StopWatchClass
+ * 
+ * @param NONE
+ * 
+ * @return NOTHING
  */
 unsigned long getCutDownTimerValue(void)
 {
@@ -220,11 +253,15 @@ unsigned long getCutDownTimerValue(void)
 /*!
  * @brief Get acceleration (in G's) of payload in the in X Y and Z direction in the form of array. 
  * 
- * @details The functions requests data from the Esplora Acceleromete or YEI 3-Space IMU (Positive = up / Negative = down)
+ * @details The functions requests data from the Esplora Accelerometer (Positive = up / Negative = down)
  * 
- * @return and array of 1. The acceleration along the Z -axis G's 0 to 3. 
- *                      2. The acceleration along the Y -axis
- *                      3. The acceleration along the X -axis
+ * @see https://www.arduino.cc/en/Reference/EsploraReadAccelerometer
+ * 
+ * @param NONE
+ * 
+ * @return Three elemenr array of 1. The acceleration along the Z -axis G's 0 to 3. 
+ *                                2. The acceleration along the Y -axis
+ *                                3. The acceleration along the X -axis
  */
 float getAccelerometerData(void)
 {
@@ -244,6 +281,10 @@ float getAccelerometerData(void)
  * @details This functions continues to try an cut down the balloon 
  * every 10 seconds until accelerometer states balloon is falling.
  *
+ * @see www.spacevr.co
+ *
+ * @param NONE
+ * 
  * @return NOTHING 
  */
 void cutDownBalloon(void)
@@ -251,7 +292,7 @@ void cutDownBalloon(void)
   digitalWrite(ESPLORA_CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q2
 
   bool isPayloadFalling = false;
-
+  
   while(!isPayloadFalling){
     //CHECK ACCELEROMETER Z AXIS HERE???
     float data[3] ={0, 0, 0};
@@ -273,7 +314,14 @@ void cutDownBalloon(void)
 /*!
  * @brief Store temperture (degrees Celsius), Pressure (kPa), and altitude (m) in 1 KB EEPROM.
  * 
- * @details The functions can write upto 62 16-Byte pieces of data to the 1KB EEPROM every 100 seconds 
+ * @details Thhis functions can write upto 62 16-Byte pieces of data to the 1KB EEPROM every 
+ * 100 seconds when using the Esplora, Nano, Pro Mini, and Uno Arduino products.
+ * 
+ * @see https://www.arduino.cc/en/Reference/EEPROMPut
+ *
+ * @param currentTemperature temperature reading from the BMP085 sensor in degreees C.
+ * @param currentPressure pressure reading from the BMP085 sensor in hPa.
+ * @param currentAltitude calcualted altitude in meters from adjusted sea level.
  * 
  * @return True if EEPROM has not overflowed - False otherwise
  */
@@ -286,7 +334,6 @@ bool LogData(float currentTemperature, float currentPressure, float currentAltit
     return false;
   }  
 
-  // Details on EEPROM.put() funtion https://www.arduino.cc/en/Reference/
   // Each float variable is 4 bytes long
   EEPROM.put(EEPROM_AddressPointer, currentTemperature);
   EEPROM_AddressPointer = EEPROM_AddressPointer + 4;   
@@ -301,9 +348,14 @@ bool LogData(float currentTemperature, float currentPressure, float currentAltit
 
 
 /*!
- * @brief Deterime which thermal system to turn and engage.
+ * @brief Deterime which thermal system (heating or cooling) to engage.
  * 
- * @param Input temperature reading from sensor.
+ * @details This functions controls a N-channel Power MOSFET driver circuit to supply
+ * current to a resistive aluminium heating element, which when off acts like a heat sink.
+ * 
+ * @see https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
+ * 
+ * @param currentTemperature temperature reading from the BMP085 sensor in degreees C.
  * 
  * @return NOTHING
  */
@@ -320,7 +372,14 @@ void adjustThermalControlSystem(int currentTemperature)
 
 
 /*!
- * @brief Turn off the thermal control system
+ * @brief Turn off heating capability of the thermal control system.
+ * 
+ * @details This functions turns off the N-channel Power MOSFET driver circuit to allow
+ * the aluminium resistive element to act like a heat sink.
+ * 
+ * @see https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
+ * 
+ * @param NONE
  * 
  * @return NOTHING
  */
@@ -337,9 +396,10 @@ void stopThermalControlSystem()
  * @details This functions caputures when Normaly Open (NO) button is 
  * depressed. It assumes there is NO hardware debouncing circuitry. 
  * 
- * @param pin - Microcontroller pin button is connected to and which is pulled high.
  * @see https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
  * 
+ * @param pin - Microcontroller pin button is connected to and which is pulled high.
+ *
  * @return 2 for long button hold, 1 for short buton hold, and loops when no button is pressed
  */
 int getProMiniButtonState(int pin)
@@ -397,10 +457,19 @@ int getProMiniButtonState(int pin)
 }//END getButtonState() FUNCTION
 
 /*!
- * @brief Example test code from Github
+ * @brief Example test code from Github for the BMP085 sensor.
+ * 
+ * @details This precision sensor from Bosch is the best low-cost sensing solution for measuring 
+ * barometric pressure and temperature. Because pressure changes with altitude you can also use it 
+ * as an altimeter!
+ * 
  * @see https://github.com/adafruit/Adafruit_BMP085_Unified/blob/master/examples/sensorapi/sensorapi.pde
+ * 
+ * @param NONE
+ *
+ * @return NOTHING
  */
-void unitTest(void)
+void unitTestBMP085(void)
 {
 
   // Test Adafruit_BMP085_Unified Class
@@ -483,13 +552,30 @@ void unitTest(void)
 }//END unitTest() FUNCTION
 
 
-
+/*!
+ * @brief Button capture loop for user input
+ * 
+ * @details This functions uses the last button pressed to determine the action of the next button press.
+ * 
+ * @see https://github.com/adafruit/Adafruit_BMP085_Unified/blob/master/examples/sensorapi/sensorapi.pde
+ * 
+ * @param lastButtonPressed last hardware button pressed, as described in software.
+ *
+ * @return NOTHING
+ */
 void waitForNextEsploraButton(int lastButtonPressed)
 {
   bool nextButtonPressed = false;
   
   while(!nextButtonPressed){
     switch(lastButtonPressed){
+      case NO_BUTTON: 
+        if (DEBUG) Serial.println("No buttons have been pressed yet. Please press button 1 next.");
+        Esplora.writeRGB(0, 0, 0); 
+          if(!Esplora.readButton(SWITCH_1) || !Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+            nextButtonPressed = false;
+        }//END IF
+        break;
       case SWITCH_1: //BUTTON_1_PIN:
         if (DEBUG) Serial.println("Button 1 was pressed last. Please press button 2 next.");
         Esplora.writeRGB(0, 255, 0); 
@@ -529,12 +615,15 @@ void waitForNextEsploraButton(int lastButtonPressed)
 }//END waitForNextEsploraButton() functions
 
 /*!
- * @brief Configures the input and output pins depending on hardware used.
+ * @brief Configure the general purpose the input and output pins. 
+ * 
+ * @details This function configures the hardware depending on Arduino product used.
+ * 
  * @see https://www.arduino.cc/en/Main/Products 
  *
- * @param arduinoBoardName - Development board select for your project
+ * @param arduinoBoardName - Development board selected for your project
  *
- $ @return NOTHING
+ * @return NOTHING
  */
 void selectHardwareConfiguration(int arduinoBoardName)
 {
@@ -613,7 +702,7 @@ void loop(void)
 
   if(DEBUG){
     Serial.println("Overview One BMP085 Sensor Connection Test STARTING."); 
-    //unitTest();
+    //unitTestBMP085();
     Serial.println("Overview One BMP085 Sensor Connection Test PASSED."); 
     delay(1000);
   }
@@ -642,7 +731,7 @@ void loop(void)
   //START THERMAL CONTROL SYSTEM AND CONTINUE LOGGING DATA EVERY 100 SECONDS
   if(!Esplora.readButton(SWITCH_3)){ //if(getProMiniButtonState(BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed
 
-    while(getCutDownTimerValue() < BALLOON_HY_1600_100_000_FEET){
+    while(getCutDownTimerValue() < BALLOON_HY_1600_100_000_FEET && currentAltitude < 30480){ // 30.48 m = 100,000 feet
       // Loop every 100 seconds until timer reaches set cut down time 
       // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
       
@@ -659,8 +748,19 @@ void loop(void)
         bmp.getTemperature(&currentTemperature);
         adjustThermalControlSystem(currentTemperature);
       }//END FOR LOOP
+       
+    }//END WHILE LOOP #1
 
-    }//END WHILE LOOP
+    cutDownBalloon();
+    
+    while(currentAltitude < 30480){ // 30.48 m = 100,000 feet
+      bmp.getTemperature(&currentTemperature);
+      bmp.getPressure(&currentPressure);
+      currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
+      
+      adjustThermalControlSystem(currentTemperature);
+      delay(1000);
+    } // END WHILE LOOP #2
     
   }//END IF
   waitForNextEsploraButton(SWITCH_3);
@@ -681,5 +781,3 @@ void loop(void)
   }
 
 }//END MAIN LOOP
-
-
