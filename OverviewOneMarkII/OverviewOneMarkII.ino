@@ -96,8 +96,8 @@ enum
   //         > Esplora.readButton(SWITCH_3)
   //         > Esplora.readButton(SWITCH_4)
   
-  ESPLORA_CUTDOWN_PIN = 3,          //D3
-  ESPLORA_HEATSINK_HEATER_PIN = 4   //D4       
+  ESPLORA_CUTDOWN_PIN = 0,           //D0 = OUT3
+  ESPLORA_HEATSINK_HEATER_PIN = 7    //PB7 = OUT2      
 
 }; //END ENUM 
 
