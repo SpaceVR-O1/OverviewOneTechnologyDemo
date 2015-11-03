@@ -49,7 +49,8 @@ enum
   NO_BUTTON = 0,
   SHORT_BUTTON_PRESS = 1,
   LONG_BUTTON_PRESS = 2,
-  BUTTON_DEPRESS_MS_RESOLUTION = 10 //Software button debounce of 10 ms    
+  BUTTON_DEPRESS_MS_RESOLUTION = 10, //Software button debounce of 10 ms    
+  HYSTERSIS_DELAY = 500
 
 }; //END ENUM 
 
@@ -96,8 +97,8 @@ enum
   //         > Esplora.readButton(SWITCH_3)
   //         > Esplora.readButton(SWITCH_4)
   
-  ESPLORA_CUTDOWN_PIN = 0,           //D0 = OUT3
-  ESPLORA_HEATSINK_HEATER_PIN = 7    //PB7 = OUT2      
+  ESPLORA_CUTDOWN_PIN = 3,          //D3
+  ESPLORA_HEATSINK_HEATER_PIN = 4   //D4       
 
 }; //END ENUM 
 
@@ -362,13 +363,16 @@ bool LogData(float currentTemperature, float currentPressure, float currentAltit
 void adjustThermalControlSystem(int currentTemperature)
 {
   if(currentTemperature < TARGET_MIN_TEMPERATURE){
-    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, HIGH);   // Turn ON MOSFET Q1 and heater  
+    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, HIGH);   // Turn ON MOSFET Q1 and heater
+    delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low  
   }
   else{
-    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics    
+    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
+    delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low     
   }//END ELSEIDF
   
 }//END adjustThermalControlSystem() FUNCTION
+
 
 
 /*!
@@ -572,37 +576,48 @@ void waitForNextEsploraButton(int lastButtonPressed)
       case NO_BUTTON: 
         if (DEBUG) Serial.println("No buttons have been pressed yet. Please press button 1 next.");
         Esplora.writeRGB(0, 0, 0); 
-          if(!Esplora.readButton(SWITCH_1) || !Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
-            nextButtonPressed = false;
-        }//END IF
+          if(!Esplora.readButton(SWITCH_1)){
+            Esplora.tone(50, 2000);  //50 hz tone
+            nextButtonPressed = true;
+        } else if(!Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+              nextButtonPressed = true;
+              }//END IF
         break;
       case SWITCH_1: //BUTTON_1_PIN:
         if (DEBUG) Serial.println("Button 1 was pressed last. Please press button 2 next.");
         Esplora.writeRGB(0, 255, 0); 
-          if(!Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+         if(!Esplora.readButton(SWITCH_2)){
+            Esplora.tone(100, 2000);  //100 hz tone
             nextButtonPressed = true;
+        } else if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+              nextButtonPressed = true;
         }//END IF
         break;
       case SWITCH_2: //BUTTON_2_PIN:
         if (DEBUG) Serial.println("Button 2 was pressed last. Please press button 3 next.");
         Esplora.writeRGB(0, 0, 255); 
-          if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
+        if(!Esplora.readButton(SWITCH_3)){
+            Esplora.tone(200, 2000);  //200 hz tone
             nextButtonPressed = true;
-        }//END IF
+        } else if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
+              nextButtonPressed = true;
+              }//END IF
         break;
+        
       case SWITCH_3: //BUTTON_3_PIN:
         if (DEBUG) Serial.println("Button 3 was pressed last. Please press button 4 next.");
         Esplora.writeRGB(255, 0, 0); 
+        
           if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
             nextButtonPressed = true;
         }//END IF
         break;
       case SWITCH_4: //BUTTON_4_PIN:
         if (DEBUG) Serial.println("Button 4 was pressed last. Have a nice day.");
-        Esplora.writeRGB(255, 0, 0); 
-          if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_3))){
-            nextButtonPressed = true;
-        }//END IF
+        Esplora.writeRGB(255,255,255); 
+        nextButtonPressed = true;
+        delay(2000);
+        break;
       default:
         Serial.println("ERROR! You have too many buttons on your Esplora Dev Kit :)");
         break;
@@ -698,7 +713,7 @@ void loop(void)
   sensors_event_t event;
   //bmp.getEvent(&event);  
   float currentTemperature, currentPressure, currentAltitude;
-  bool ok = false;                       // System status flag
+  bool ok = true;                       // System status flag
 
   if(DEBUG){
     Serial.println("Overview One BMP085 Sensor Connection Test STARTING."); 
@@ -711,23 +726,26 @@ void loop(void)
   Serial.println("Push Button 2 to start data logging.");
   Serial.println("Push button 3 to start thermal control system.");
   Serial.println("Push button 4 to stop thermal control system and data logging.");
-
+  
+  waitForNextEsploraButton(NO_BUTTON);
   //START CUT DOWN TIMER
   if(!Esplora.readButton(SWITCH_1)){ //if(getProMiniButtonState(BUTTON_1_PIN) == SHORT_BUTTON_PRESS) //Loops until button 1 is pressed
     startCutDownTimer();   
-    Esplora.tone(50, 2000);          // Two second 50 Hz tone
+   // Esplora.tone(50, 2000);          // Two second 50 Hz tone
   }//END IF
-  waitForNextEsploraButton(SWITCH_1);
 
+  waitForNextEsploraButton(SWITCH_1); 
   //START DATA LOGGING
   if(!Esplora.readButton(SWITCH_2)){ //if(getProMiniButtonState(BUTTON_3_PIN) == LONG_BUTTON_PRESS){ //Loops until button 3 is pressed
+    
     bmp.getTemperature(&currentTemperature);
     bmp.getPressure(&currentPressure);
     currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
     ok &= LogData(currentTemperature, currentPressure, currentAltitude);
+    
   }//END IF
-  waitForNextEsploraButton(SWITCH_2); 
   
+  waitForNextEsploraButton(SWITCH_2);
   //START THERMAL CONTROL SYSTEM AND CONTINUE LOGGING DATA EVERY 100 SECONDS
   if(!Esplora.readButton(SWITCH_3)){ //if(getProMiniButtonState(BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed
 
@@ -763,12 +781,14 @@ void loop(void)
     } // END WHILE LOOP #2
     
   }//END IF
-  waitForNextEsploraButton(SWITCH_3);
-  
+
+  waitForNextEsploraButton(SWITCH_3);  
   if(!Esplora.readButton(SWITCH_4)){
     //if(getProMiniButtonState(BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed
     stopThermalControlSystem();  
   }
+  
+  waitForNextEsploraButton(SWITCH_4);  
   
   //Status LED at end of flight 
   if(ok){
@@ -779,5 +799,6 @@ void loop(void)
     if (DEBUG) Serial.println("HARDWARE ERORR");
     Esplora.writeRGB(255, 0, 0); //Turn RGB LED ON and make red   
   }
-
+  delay(10000);
+  
 }//END MAIN LOOP
