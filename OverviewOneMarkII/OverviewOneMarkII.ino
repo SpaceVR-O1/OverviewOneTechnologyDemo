@@ -560,8 +560,10 @@ void unitTestBMP085(void)
  * @brief Button capture loop for user input
  * 
  * @details This functions uses the last button pressed to determine the action of the next button press.
+ * Plays 2001: A Space Odyssey when all four buttons are pressed :)
  * 
  * @see https://github.com/adafruit/Adafruit_BMP085_Unified/blob/master/examples/sensorapi/sensorapi.pde
+ * @see http://www.phy.mtu.edu/~suits/notefreqs.html
  * 
  * @param lastButtonPressed last hardware button pressed, as described in software.
  *
@@ -577,7 +579,7 @@ void waitForNextEsploraButton(int lastButtonPressed)
         if (DEBUG) Serial.println("No buttons have been pressed yet. Please press button 1 next.");
         Esplora.writeRGB(0, 0, 0); 
           if(!Esplora.readButton(SWITCH_1)){
-            Esplora.tone(50, 2000);  //50 hz tone
+            Esplora.tone(131, 2000);  //C3 Note
             nextButtonPressed = true;
         } else if(!Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
               nextButtonPressed = true;
@@ -587,7 +589,7 @@ void waitForNextEsploraButton(int lastButtonPressed)
         if (DEBUG) Serial.println("Button 1 was pressed last. Please press button 2 next.");
         Esplora.writeRGB(0, 255, 0); 
          if(!Esplora.readButton(SWITCH_2)){
-            Esplora.tone(100, 2000);  //100 hz tone
+            Esplora.tone(196, 2000);  //G3 Note
             nextButtonPressed = true;
         } else if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
               nextButtonPressed = true;
@@ -597,7 +599,7 @@ void waitForNextEsploraButton(int lastButtonPressed)
         if (DEBUG) Serial.println("Button 2 was pressed last. Please press button 3 next.");
         Esplora.writeRGB(0, 0, 255); 
         if(!Esplora.readButton(SWITCH_3)){
-            Esplora.tone(200, 2000);  //200 hz tone
+            Esplora.tone(262, 3000);  //C4 Note
             nextButtonPressed = true;
         } else if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
               nextButtonPressed = true;
@@ -607,6 +609,7 @@ void waitForNextEsploraButton(int lastButtonPressed)
       case SWITCH_3: //BUTTON_3_PIN:
         if (DEBUG) Serial.println("Button 3 was pressed last. Please press button 4 next.");
         Esplora.writeRGB(255, 0, 0); 
+       
         
           if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
             nextButtonPressed = true;
@@ -615,8 +618,10 @@ void waitForNextEsploraButton(int lastButtonPressed)
       case SWITCH_4: //BUTTON_4_PIN:
         if (DEBUG) Serial.println("Button 4 was pressed last. Have a nice day.");
         Esplora.writeRGB(255,255,255); 
+        Esplora.tone(330, 400);  //E4 Note
+        delay(300);
+        Esplora.tone(311, 2500); //D#4 Note
         nextButtonPressed = true;
-        delay(2000);
         break;
       default:
         Serial.println("ERROR! You have too many buttons on your Esplora Dev Kit :)");
@@ -731,7 +736,6 @@ void loop(void)
   //START CUT DOWN TIMER
   if(!Esplora.readButton(SWITCH_1)){ //if(getProMiniButtonState(BUTTON_1_PIN) == SHORT_BUTTON_PRESS) //Loops until button 1 is pressed
     startCutDownTimer();   
-   // Esplora.tone(50, 2000);          // Two second 50 Hz tone
   }//END IF
 
   waitForNextEsploraButton(SWITCH_1); 
@@ -783,13 +787,11 @@ void loop(void)
   }//END IF
 
   waitForNextEsploraButton(SWITCH_3);  
-  if(!Esplora.readButton(SWITCH_4)){
-    //if(getProMiniButtonState(BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed
+  if(!Esplora.readButton(SWITCH_4)){ //if(getProMiniButtonState(BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed
     stopThermalControlSystem();  
   }
   
   waitForNextEsploraButton(SWITCH_4);  
-  
   //Status LED at end of flight 
   if(ok){
     if (DEBUG) Serial.println("GOOD TO GO");
@@ -799,6 +801,8 @@ void loop(void)
     if (DEBUG) Serial.println("HARDWARE ERORR");
     Esplora.writeRGB(255, 0, 0); //Turn RGB LED ON and make red   
   }
-  delay(10000);
   
+  delay(10000);
+
 }//END MAIN LOOP
+
