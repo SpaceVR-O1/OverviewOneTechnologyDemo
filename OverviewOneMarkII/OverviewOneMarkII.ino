@@ -1,9 +1,8 @@
 #include <Wire.h>
-#include <Esplora.h>             //Include the Esplora library
 #include <EEPROM.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085_U.h>
-#include <StopWatch.h>
+
 
 /* This driver assumes you are using the Arduino Pro Mini 3.3V wired as follows:
  * https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
@@ -48,7 +47,7 @@ enum
   Z_AXIS_INDEX = 2,  
   NO_BUTTON = 0,
   SHORT_BUTTON_PRESS = 1,
-  LONG_BUTTON_PRESS = 2,
+  LONG_BUTTON_PRESS = 4,
   BUTTON_DEPRESS_MS_RESOLUTION = 10, //Software button debounce of 10 ms    
   HYSTERSIS_DELAY = 500
 
@@ -87,7 +86,7 @@ enum
   PRO_MINI_BUTTON_3_PIN = 7,        //D7
   PRO_MINI_BUTTON_4_PIN = 8,        //D8
   PRO_MINI_HEATSINK_HEATER_PIN = 9, //D9
-
+  PRO_MINI_YELLOW_LED = 13,         //D13
 
   // The Arduino Esplora uses the following:
   // Outputs: D3 and D4
@@ -112,7 +111,7 @@ enum
   BALLOON_HY_1600_100_000_FEET = 5379,     // seconds
   BALLOON_HY_1600_75_000_FEET  = 4034,     // seconds
   BALLOON_HY_1600_X_50_000_FEET  = 2689,   // seconds
-  SEA_LEVEL_PRESSURE = 1022,               // hPa 
+  SEA_LEVEL_PRESSURE = 10223,               // hPa 
   TARGET_MIN_TEMPERATURE =  0              // degrees C   
 
 }; //END ENUM 
@@ -166,151 +165,6 @@ void displaySensorDetails(void)
   delay(5000);
 }//END displaySensorDetails() FUNCTION
 
-
-
-StopWatch SW_CutDown(StopWatch::SECONDS);  // Initialize to full seconds
-StopWatch SWarray[5];                      // Defaults to milliseconds
-
-/*!
- * @brief START running timer.
- * 
- * @detail This timer is used to cutdown the balloon after a set time. 
- * This stops the balloon from being carried to far away by the jet stream.
- * 
- * @see http://playground.arduino.cc/Code/StopWatchClass
- * 
- * @param NONE
- * 
- * @return NOTHING
- */
-void startCutDownTimer(void)
-{
-  if(DEBUG) Serial.println("Timer has started.");
-  SW_CutDown.start();
-  
-}//END startCutDownTimer() FUNCTION
-
-/*!
- * @brief STOP timer until restartCutDownTimer() or startCutDownTimer() function is called.
- * 
- * @detail This timer is used to cutdown the balloon after a set time. 
- * This stops the balloon from being carried to far away by the jet stream.
- * 
- * @see http://playground.arduino.cc/Code/StopWatchClass
- * 
- * @param NONE
- * 
- * @return NOTHING
- */
-void stopCutDownTimer(void)
-{
-  if(DEBUG) Serial.println("Timer has stopped.");
-  SW_CutDown.stop();
-  
-}//END stopCutDownTimer() FUNCTION
-
-/*!
- * @brief Reset timer to zero seconds and keep timer running.
- * 
- * @detail This timer is used to cutdown the balloon after a set time. 
- * This stops the balloon from being carried to far away by the jet stream.
- * 
- * @see http://playground.arduino.cc/Code/StopWatchClass
- * 
- * @param NONE
- * 
- * @return NOTHING
- */
-void restartCutDownTimer(void)
-{
-  if(DEBUG) Serial.println("Timer has being reset to zero and is still running.");
-  SW_CutDown.reset();
-  
-}//END restartCutDownTimer() FUNCTION
-
-/*!
- * @brief Get current length timer has run for in seconds.
- * 
- * @detail This timer is used to cutdown the balloon after a set time. 
- * This stops the balloon from being carried to far away by the jet stream.
- * 
- * @see http://playground.arduino.cc/Code/StopWatchClass
- * 
- * @param NONE
- * 
- * @return NOTHING
- */
-unsigned long getCutDownTimerValue(void)
-{
-  if(DEBUG){
-    Serial.print("Current elapsed time is: ");
-    Serial.println(SW_CutDown.elapsed());
-  }//END IF
-  
-  return SW_CutDown.elapsed();
-  
-}//END getCutDownTimerValue() FUNCTION
-
-/*!
- * @brief Get acceleration (in G's) of payload in the in X Y and Z direction in the form of array. 
- * 
- * @details The functions requests data from the Esplora Accelerometer (Positive = up / Negative = down)
- * 
- * @see https://www.arduino.cc/en/Reference/EsploraReadAccelerometer
- * 
- * @param NONE
- * 
- * @return Three elemenr array of 1. The acceleration along the Z -axis G's 0 to 3. 
- *                                2. The acceleration along the Y -axis
- *                                3. The acceleration along the X -axis
- */
-float getAccelerometerData(void)
-{
-  float axisValues[3];
-
-  axisValues[X_AXIS_INDEX] = Esplora.readAccelerometer(X_AXIS);
-  axisValues[Y_AXIS_INDEX] = Esplora.readAccelerometer(Y_AXIS);
-  axisValues[Z_AXIS_INDEX] = Esplora.readAccelerometer(Z_AXIS);
-
-  return axisValues[3];
-
-}//END getAccelerometerData() FUNCTION
-
-/*!
- * @brief Give command to cut down balloon 
- * 
- * @details This functions continues to try an cut down the balloon 
- * every 10 seconds until accelerometer states balloon is falling.
- *
- * @see www.spacevr.co
- *
- * @param NONE
- * 
- * @return NOTHING 
- */
-void cutDownBalloon(void)
-{
-  digitalWrite(ESPLORA_CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q2
-
-  bool isPayloadFalling = false;
-  
-  while(!isPayloadFalling){
-    //CHECK ACCELEROMETER Z AXIS HERE???
-    float data[3] ={0, 0, 0};
-    data[3] = getAccelerometerData();
-    
-    if(data[Z_AXIS_INDEX] > 0){
-      isPayloadFalling = false;
-      delay(10000);
-      digitalWrite(ESPLORA_CUTDOWN_PIN, HIGH);   // Turn on MOSFET Q1   
-    }
-    else{
-      isPayloadFalling = true; 
-    }//END ELSEIF
-
-  }//END WHILE LOOP
-  
-}//END cutDownBalloon() FUNCTION
 
 /*!
  * @brief Store temperture (degrees Celsius), Pressure (kPa), and altitude (m) in 1 KB EEPROM.
@@ -404,20 +258,20 @@ void stopThermalControlSystem()
  * 
  * @param pin - Microcontroller pin button is connected to and which is pulled high.
  *
- * @return 2 for long button hold, 1 for short buton hold, and loops when no button is pressed
+ * @return 4 for long button hold, 1 for short buton hold, and loops when no button is pressed
  */
 int getProMiniButtonState(int pin)
 {
   bool buttonPressCaptured = false;
-  unsigned long ButtonDepressTimeMS = 0;
+  unsigned long ButtonDepressTimeMS = 100;
 
   while(!buttonPressCaptured){   
     if(digitalRead(pin) == HIGH){             // Is button pressed? 
-      SWarray[0].start();                     // Start button debounce and push length timer
+      //SWarray[0].start();                     // Start button debounce and push length timer
 
       while(digitalRead(pin) == HIGH){        // Is button still pressed?
         delay(BUTTON_DEPRESS_MS_RESOLUTION);  // Software button debounce ~10 ms
-        ButtonDepressTimeMS = SWarray[0].elapsed();  // Timer to deterime short vs long button press
+        //ButtonDepressTimeMS = SWarray[0].elapsed();  // Timer to deterime short vs long button press
       }//END INNER WHILE LOOP     
 
       if(ButtonDepressTimeMS > 2000){         
@@ -432,22 +286,22 @@ int getProMiniButtonState(int pin)
         buttonPressCaptured = false;
         delay(2000);
         Serial.println("ERROR! Invalid button press length.");
-        SWarray[0].reset();                // Reset timer to determine button press type again.
+        //SWarray[0].reset();                // Reset timer to determine button press type again.
       }//END INNER ELSEIF       
 
     }//END OUTER IF
 
   switch(pin){
-    case SWITCH_UP: //BUTTON_1_PIN:
+    case PRO_MINI_BUTTON_1_PIN:
       Serial.println("Please push button 1 to begin cut down timer.");
       break;
-    case SWITCH_RIGHT: //BUTTON_2_PIN:
+    case PRO_MINI_BUTTON_2_PIN:
       Serial.println("Please push button 2 to begin data logging.");
       break;
-    case SWITCH_DOWN: //BUTTON_3_PIN:
+    case PRO_MINI_BUTTON_3_PIN:
       Serial.println("Please push button 3 to start thermal control system.");
       break;
-    case SWITCH_LEFT: //BUTTON_4_PIN:
+    case PRO_MINI_BUTTON_4_PIN:
       Serial.println("Please push button 4 to stop thermal control system.");
       break;
     default:
@@ -477,7 +331,7 @@ void unitTestBMP085(void)
 {
 
   // Test Adafruit_BMP085_Unified Class
-  Serial.print("Testing EAdafruit_BMP085_Unified Class.");
+  Serial.println("Testing EAdafruit_BMP085_Unified Class.");
 
   /* Get a new sensor event */
   sensors_event_t event;
@@ -516,7 +370,7 @@ void unitTestBMP085(void)
     /* Then convert the atmospheric pressure, and SLP to altitude         *
      * Update this next line with the current SLP for better results      *
      * SLP = 1022 hPa at Denver International Airport                     */
-    float seaLevelPressure = 1022; // = SENSORS_PRESSURE_SEALEVELHPA;
+    float seaLevelPressure = 1023.2; //SENSORS_PRESSURE_SEALEVELHPA;
     Serial.print("Altitude:    "); 
     Serial.print(bmp.pressureToAltitude(seaLevelPressure, event.pressure)); 
     Serial.println(" m");
@@ -551,89 +405,11 @@ void unitTestBMP085(void)
   eeAddress += sizeof(float); //Move address to the next byte after float 'f'.
 
   EEPROM.put(eeAddress, customVar);
-  Serial.print("Written +custom data type! \n\nView the example sketch eeprom_get to see how you can retrieve the values!");
+  Serial.print("Custom data type written! \nView the example sketch eeprom_get to see how you can retrieve the values! \n\n");
 
 }//END unitTest() FUNCTION
 
-
-/*!
- * @brief Button capture loop for user input
- * 
- * @details This functions uses the last button pressed to determine the action of the next button press.
- * Plays 2001: A Space Odyssey when all four buttons are pressed :)
- * 
- * @see https://github.com/adafruit/Adafruit_BMP085_Unified/blob/master/examples/sensorapi/sensorapi.pde
- * @see http://www.phy.mtu.edu/~suits/notefreqs.html
- * 
- * @param lastButtonPressed last hardware button pressed, as described in software.
- *
- * @return NOTHING
- */
-void waitForNextEsploraButton(int lastButtonPressed)
-{
-  bool nextButtonPressed = false;
-  
-  while(!nextButtonPressed){
-    switch(lastButtonPressed){
-      case NO_BUTTON: 
-        if (DEBUG) Serial.println("No buttons have been pressed yet. Please press button 1 next.");
-        Esplora.writeRGB(0, 0, 0); 
-          if(!Esplora.readButton(SWITCH_1)){
-            Esplora.tone(131, 2000);  //C3 Note
-            nextButtonPressed = true;
-        } else if(!Esplora.readButton(SWITCH_2) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
-              nextButtonPressed = true;
-              }//END IF
-        break;
-      case SWITCH_1: //BUTTON_1_PIN:
-        if (DEBUG) Serial.println("Button 1 was pressed last. Please press button 2 next.");
-        Esplora.writeRGB(0, 255, 0); 
-         if(!Esplora.readButton(SWITCH_2)){
-            Esplora.tone(196, 2000);  //G3 Note
-            nextButtonPressed = true;
-        } else if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_3))||(!Esplora.readButton(SWITCH_4))){
-              nextButtonPressed = true;
-        }//END IF
-        break;
-      case SWITCH_2: //BUTTON_2_PIN:
-        if (DEBUG) Serial.println("Button 2 was pressed last. Please press button 3 next.");
-        Esplora.writeRGB(0, 0, 255); 
-        if(!Esplora.readButton(SWITCH_3)){
-            Esplora.tone(262, 3000);  //C4 Note
-            nextButtonPressed = true;
-        } else if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
-              nextButtonPressed = true;
-              }//END IF
-        break;
-        
-      case SWITCH_3: //BUTTON_3_PIN:
-        if (DEBUG) Serial.println("Button 3 was pressed last. Please press button 4 next.");
-        Esplora.writeRGB(255, 0, 0); 
-       
-        
-          if(!Esplora.readButton(SWITCH_1) || (!Esplora.readButton(SWITCH_2))||(!Esplora.readButton(SWITCH_4))){
-            nextButtonPressed = true;
-        }//END IF
-        break;
-      case SWITCH_4: //BUTTON_4_PIN:
-        if (DEBUG) Serial.println("Button 4 was pressed last. Have a nice day.");
-        Esplora.writeRGB(255,255,255); 
-        Esplora.tone(330, 400);  //E4 Note
-        delay(300);
-        Esplora.tone(311, 2500); //D#4 Note
-        nextButtonPressed = true;
-        break;
-      default:
-        Serial.println("ERROR! You have too many buttons on your Esplora Dev Kit :)");
-        break;
-   }//END SWITCH
-
-   delay(500); // Slow down print statements
-   
- }//END WHILE LOOP
-        
-}//END waitForNextEsploraButton() functions
-
+ 
 /*!
  * @brief Configure the general purpose the input and output pins. 
  * 
@@ -655,18 +431,31 @@ void selectHardwareConfiguration(int arduinoBoardName)
       break;
     case PRO_MINI: //BUTTON_2_PIN:
       if (DEBUG) Serial.println("Arduino Pro Mini selected.");
+      pinMode(PRO_MINI_CUTDOWN_PIN, OUTPUT);
       pinMode(PRO_MINI_BUTTON_1_PIN, INPUT);
       pinMode(PRO_MINI_BUTTON_2_PIN, INPUT);
       pinMode(PRO_MINI_BUTTON_3_PIN, INPUT);
       pinMode(PRO_MINI_BUTTON_4_PIN, INPUT);
+      pinMode(PRO_MINI_YELLOW_LED, OUTPUT);
+      pinMode(PRO_MINI_HEATSINK_HEATER_PIN, OUTPUT);
       break;
     case NANO: //BUTTON_3_PIN:
       if (DEBUG) Serial.println("Arduino Nano selected.");
-      //TO-DO
+      pinMode(NANO_CUTDOWN_PIN, OUTPUT);
+      pinMode(NANO_BUTTON_1_PIN, INPUT);
+      pinMode(NANO_BUTTON_2_PIN, INPUT);
+      pinMode(NANO_BUTTON_3_PIN, INPUT);
+      pinMode(NANO_BUTTON_4_PIN, INPUT);
+      pinMode(NANO_HEATSINK_HEATER_PIN, OUTPUT);
       break;
     case UNO: //BUTTON_4_PIN:
       if (DEBUG) Serial.println("Arduino Uno selected.");
-      //TO-DO
+      pinMode(UNO_CUTDOWN_PIN, OUTPUT);
+      pinMode(UNO_BUTTON_1_PIN, INPUT);
+      pinMode(UNO_BUTTON_2_PIN, INPUT);
+      pinMode(UNO_BUTTON_3_PIN, INPUT);
+      pinMode(UNO_BUTTON_4_PIN, INPUT);
+      pinMode(UNO_HEATSINK_HEATER_PIN, OUTPUT);
       break;
     default:
       Serial.println("ERROR! Invalid Arduino development board selected. Get a new job :)");
@@ -682,24 +471,23 @@ void selectHardwareConfiguration(int arduinoBoardName)
 void setup(void) 
 {
   Serial.begin(9600);
+  
   delay(100);
   while (!Serial);
   
-  selectHardwareConfiguration(ESPLORA); //selectHardwareConfiguration(PRO_MINI);  //selectHardwareConfiguration(NANO);
+  selectHardwareConfiguration(PRO_MINI); //selectHardwareConfiguration(ESPLORA);   //selectHardwareConfiguration(NANO);
   
   EEPROM_AddressPointer = 0;  // Initialize global variable
   
   displaySensorDetails();
 
-  //
+  
   /* Initialise the sensor */
-  //  if(!bmp.begin())
-  //  {
-  //    /* There was a problem detecting the BMP085 ... check your connections */
-  //    if(DEBUG) Serial.print("Ooops, no BMP085 detected ... Check your wiring or I2C ADDR!");
-  //    while(1);
-  //  }
-  //  
+  if(!bmp.begin()){
+    //* There was a problem detecting the BMP085 ... check your connections */
+    if(DEBUG) Serial.print("Ooops, no BMP085 detected ... Check your wiring or I2C ADDR!");
+    while(1);
+  }
   /* Display some basic information on this sensor */
 
   
@@ -721,9 +509,9 @@ void loop(void)
   bool ok = true;                       // System status flag
 
   if(DEBUG){
-    Serial.println("Overview One BMP085 Sensor Connection Test STARTING."); 
-    //unitTestBMP085();
-    Serial.println("Overview One BMP085 Sensor Connection Test PASSED."); 
+    Serial.println("Overview One BMP085 Sensor Connection Test STARTING. \n"); 
+    unitTestBMP085();
+    Serial.println("Overview One BMP085 Sensor Connection Test PASSED. \n\n"); 
     delay(1000);
   }
 
@@ -732,28 +520,18 @@ void loop(void)
   Serial.println("Push button 3 to start thermal control system.");
   Serial.println("Push button 4 to stop thermal control system and data logging.");
   
-  waitForNextEsploraButton(NO_BUTTON);
-  //START CUT DOWN TIMER
-  if(!Esplora.readButton(SWITCH_1)){ //if(getProMiniButtonState(BUTTON_1_PIN) == SHORT_BUTTON_PRESS) //Loops until button 1 is pressed
-    startCutDownTimer();   
-  }//END IF
-
-  waitForNextEsploraButton(SWITCH_1); 
   //START DATA LOGGING
-  if(!Esplora.readButton(SWITCH_2)){ //if(getProMiniButtonState(BUTTON_3_PIN) == LONG_BUTTON_PRESS){ //Loops until button 3 is pressed
-    
+  if(getProMiniButtonState(PRO_MINI_BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed !Esplora.readButton(SWITCH_2)){ 
     bmp.getTemperature(&currentTemperature);
     bmp.getPressure(&currentPressure);
     currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
-    ok &= LogData(currentTemperature, currentPressure, currentAltitude);
-    
+    ok &= LogData(currentTemperature, currentPressure, currentAltitude); 
   }//END IF
   
-  waitForNextEsploraButton(SWITCH_2);
   //START THERMAL CONTROL SYSTEM AND CONTINUE LOGGING DATA EVERY 100 SECONDS
-  if(!Esplora.readButton(SWITCH_3)){ //if(getProMiniButtonState(BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed
+  if(getProMiniButtonState(PRO_MINI_BUTTON_3_PIN) == SHORT_BUTTON_PRESS){ // //Loops until button 3 is pressed  !Esplora.readButton(SWITCH_3))
 
-    while(getCutDownTimerValue() < BALLOON_HY_1600_100_000_FEET && currentAltitude < 30480){ // 30.48 m = 100,000 feet
+    while(currentAltitude < 30480){ // 30.48 m = 100,000 feet
       // Loop every 100 seconds until timer reaches set cut down time 
       // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
       
@@ -770,36 +548,26 @@ void loop(void)
         bmp.getTemperature(&currentTemperature);
         adjustThermalControlSystem(currentTemperature);
       }//END FOR LOOP
-       
+    
     }//END WHILE LOOP #1
-
-    cutDownBalloon();
-    
-    while(currentAltitude < 30480){ // 30.48 m = 100,000 feet
-      bmp.getTemperature(&currentTemperature);
-      bmp.getPressure(&currentPressure);
-      currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
-      
-      adjustThermalControlSystem(currentTemperature);
-      delay(1000);
-    } // END WHILE LOOP #2
-    
+       
   }//END IF
 
-  waitForNextEsploraButton(SWITCH_3);  
-  if(!Esplora.readButton(SWITCH_4)){ //if(getProMiniButtonState(BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed
+  //waitForNextEsploraButton(SWITCH_3);  
+  if(getProMiniButtonState(PRO_MINI_BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed !Esplora.readButton(SWITCH_4)){ 
     stopThermalControlSystem();  
   }
   
-  waitForNextEsploraButton(SWITCH_4);  
+  delay(5000);
+  
   //Status LED at end of flight 
   if(ok){
     if (DEBUG) Serial.println("GOOD TO GO");
-    Esplora.writeRGB(0, 255, 0); //Turn RGB LED ON and make green   
+    digitalWrite(PRO_MINI_YELLOW_LED,HIGH); //Esplora.writeRGB(0, 255, 0); //Turn RGB LED ON and make green   
   }
   else{
     if (DEBUG) Serial.println("HARDWARE ERORR");
-    Esplora.writeRGB(255, 0, 0); //Turn RGB LED ON and make red   
+    digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, HIGH); // Esplora.writeRGB(255, 0, 0); //Turn RGB LED ON and make red   
   }
   
   delay(10000);
