@@ -106,13 +106,13 @@ enum
  * GLOBAL VARIABLES
  ***************************************************************************/
 int EEPROM_AddressPointer;         // Points to next memory location to write to
-/*
+
 struct MyObject {                  // EEPROM.put() test structure 
   float field1;
   byte field2;
   char name[10];
 };
-*/
+
 
 
 /***************************************************************************
@@ -179,7 +179,7 @@ bool LogData(float currentTemperature, float currentPressure)
   EEPROM_AddressPointer += sizeof(float);  
   EEPROM.put(EEPROM_AddressPointer, currentPressure/100.00);
   EEPROM_AddressPointer += sizeof(float); 
-
+  Serial.println("Log Data Successful");
   return true;
   
 }//END LogData() FUNCTION
@@ -207,7 +207,7 @@ void adjustThermalControlSystem(int currentTemperature)
     digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
     delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low     
   }//END ELSEIDF
-  
+  if (DEBUG) Serial.println(" THERMAL CONTROL SYSTEM ADJUSTING.");
 }//END adjustThermalControlSystem() FUNCTION
 
 
@@ -224,11 +224,7 @@ void adjustThermalControlSystem(int currentTemperature)
  * 
  * @return NOTHING
  */
-void stopThermalControlSystem()
-{
-  digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
-  
-}//END stopThermalControlSystem() FUNCTION
+
 
 /*!
  * @brief Prints data in the 1KB EEPROM collected during flight.
@@ -256,81 +252,7 @@ void EEPROMGET(){
   }
 }
 
-/*!
- * @brief Caputure button pushes on an external hardware button.
- *
- * @details This functions caputures when Normaly Open (NO) button is 
- * depressed. It assumes there is NO hardware debouncing circuitry. 
- * 
- * @see https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
- * 
- * @param pin - Microcontroller pin button is connected to and which is pulled high.
- *
- * @return 4 for long button hold, 1 for short buton hold, and loops when no button is pressed
- */
-int getProMiniButtonState(int pin)
-{
-  bool buttonPressCaptured = false;
-  unsigned long ButtonDepressTimeMS = 666;
-  
-  while(!buttonPressCaptured){  
-    Serial.println(pin);
-     
-    if(digitalRead(pin) == LOW){             // Is button pressed? 
-      Serial.println("TEST");
-      //SW_Button.start();                     // Start button debounce and push length timer
 
-      while(digitalRead(pin) == LOW){        // Is button still pressed?
-        delay(BUTTON_DEPRESS_MS_RESOLUTION);  // Software button debounce ~10 ms
-        //ButtonDepressTimeMS = SW_Button.elapsed();  // Timer to deterime short vs long button press 
-      }//END INNER WHILE LOOP     
-
-      if(DEBUG){
-        Serial.print("Button was pressed for the following number of millseconds: ");
-        Serial.println(ButtonDepressTimeMS);
-      }
-        
-      if(ButtonDepressTimeMS > 5000){         
-        buttonPressCaptured = true;          // Long button press
-        if(DEBUG) Serial.print("LONG button press occurred.");
-        return LONG_BUTTON_PRESS;   
-      } 
-      else if(ButtonDepressTimeMS <= 2000 ){  //BUTTON_DEPRESS_MS_RESOLUTION < ButtonDepressTimeMS &&
-        buttonPressCaptured = true;         // Short button press
-        if(DEBUG) Serial.print("SHORT button press occurred.");
-        return SHORT_BUTTON_PRESS;   
-      }
-      else{
-        buttonPressCaptured = false;
-        delay(2000);
-        Serial.println("ERROR! Invalid button press length.");
-        //SWarray[0].reset();                // Reset timer to determine button press type again.
-      }//END INNER ELSEIF       
-
-    }//END OUTER IF
-
-  switch(pin){
-    case PRO_MINI_BUTTON_1_PIN:
-      Serial.println("Push button #1 to start thermal control system and data logging.");
-      break;
-    case PRO_MINI_BUTTON_2_PIN:
-      Serial.println("Push button #2 and hold for 3 seconds to stop thermal control system and data logging,");
-      break;
-    case PRO_MINI_BUTTON_3_PIN:
-      Serial.println("Undefined button.");
-      break;
-    case PRO_MINI_BUTTON_4_PIN:
-      Serial.println("Undefined button.");
-      break;
-    default:
-      Serial.println("ERROR! Invalid hardware pin passed to getButtonState() function.");
-      break;
-   }// END SWITCH 
-   delay(1000);
-    
-  }//END OUTER WHILE LOOP  
-
-}//END getButtonState() FUNCTION
 
 /*!
  * @brief Example test code from Github for the BMP085 sensor.
@@ -411,15 +333,16 @@ void unitTestBMP085(void)
   Serial.println("Written float data type!");
 
   /** Put is designed for use with custom structures also. **/
-/*
+
   //Data to store.
   MyObject customVar = {
     3.14f,
     65,
     "Working!"
   };
-*/
+
   eeAddress += sizeof(float); //Move address to the next byte after float 'f'.
+  
 
   //EEPROM.put(eeAddress, customVar);
   Serial.print("Custom data type written! \nView the example sketch eeprom_get to see how you can retrieve the values! \n\n");
@@ -434,7 +357,7 @@ void unitTestBMP085(void)
     delay(250);
   }//END FOR LOOP
   */ 
-   
+   EEPROMGET();
 }//END unitTest() FUNCTION
 
 /*!
@@ -537,56 +460,32 @@ void loop(void)
     delay(1000);
   }
 
-  Serial.println("Push button #1 to start thermal control system and data logging.");
-  Serial.println("Push button #2 and hold for 3 seconds to stop thermal control system and data logging.\n\n");
- /* 
+  
   //START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS
-  //if(getProMiniButtonState(PRO_MINI_BUTTON_1_PIN)){  //== SHORT_BUTTON_PRESS
-    
+  
+    if (DEBUG) Serial.println("START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS.");
     while(systemOn){ 
       // Loop every 100 seconds until button #1 is pressed again
       // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
-      if (DEBUG) Serial.println("START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS.");
+      
       
       bmp.getTemperature(&currentTemperature);
       bmp.getPressure(&currentPressure);     
-      adjustThermalControlSystem(currentTemperature);
+      //adjustThermalControlSystem(currentTemperature);
       ok &= LogData(currentTemperature, currentPressure);  
+      
+        
     
       // Pause 100 seconds for data logging, but update thermal control system every 1 second
       for (int sec = 0; sec < 100; sec++){
         delay(1000); 
         bmp.getTemperature(&currentTemperature);
         adjustThermalControlSystem(currentTemperature);
-        if (DEBUG) Serial.println(" THERMAL CONTROL SYSTEM ADJUSTED.");
         
-        if(digitalRead(PRO_MINI_BUTTON_2_PIN) == LOW){
-            if (DEBUG) Serial.println("STOP THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS.");                  
-            stopThermalControlSystem(); 
-            systemOn = false;  
-        }//END DIGITAL READ IF
-      
+
      }//END FOR LOOP
      
    }//END OUTER WHILE LOOP
-       
-  //}//END IF
- 
-  delay(5000);
-  
-  //Status LED at end of flight 
-  if(ok){
-    if (DEBUG) Serial.println("GOOD TO GO");
-    digitalWrite(PRO_MINI_YELLOW_LED,HIGH);   
-  }
-  else{
-    if (DEBUG) Serial.println("HARDWARE ERORR");
-    digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, HIGH);  
-  }
-  
-  delay(2000);
-
-  EEPROMGET();
-*/  
+     
 }//END MAIN LOOP
 
