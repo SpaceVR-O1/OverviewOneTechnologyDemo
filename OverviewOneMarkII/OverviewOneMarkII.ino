@@ -38,13 +38,9 @@ enum
 {
 
   DEBUG = 1,                     //Change to 0 to turn OFF debug statments
-  ESPLORA = 1,
   PRO_MINI = 2,
   NANO = 3,
   UNO = 4,
-  X_AXIS_INDEX = 0,
-  Y_AXIS_INDEX = 1,
-  Z_AXIS_INDEX = 2,  
   NO_BUTTON = 0,
   SHORT_BUTTON_PRESS = 1,
   LONG_BUTTON_PRESS = 4,
@@ -86,18 +82,7 @@ enum
   PRO_MINI_BUTTON_3_PIN = 7,        //D7
   PRO_MINI_BUTTON_4_PIN = 8,        //D8
   PRO_MINI_HEATSINK_HEATER_PIN = 9, //D9
-  PRO_MINI_YELLOW_LED = 13,         //D13
-
-  // The Arduino Esplora uses the following:
-  // Outputs: D3 and D4
-  // Inputs: Built in buttons 
-  //         > Esplora.readButton(SWITCH_1)
-  //         > Esplora.readButton(SWITCH_2)
-  //         > Esplora.readButton(SWITCH_3)
-  //         > Esplora.readButton(SWITCH_4)
-  
-  ESPLORA_CUTDOWN_PIN = 3,          //D3
-  ESPLORA_HEATSINK_HEATER_PIN = 4   //D4       
+  PRO_MINI_YELLOW_LED = 13,         //D13  
 
 }; //END ENUM 
 
@@ -111,7 +96,7 @@ enum
   BALLOON_HY_1600_100_000_FEET = 5379,     // seconds
   BALLOON_HY_1600_75_000_FEET  = 4034,     // seconds
   BALLOON_HY_1600_X_50_000_FEET  = 2689,   // seconds
-  SEA_LEVEL_PRESSURE = 10223,               // hPa 
+  SEA_LEVEL_PRESSURE = 1023,               // hPa 
   TARGET_MIN_TEMPERATURE =  0              // degrees C   
 
 }; //END ENUM 
@@ -121,13 +106,13 @@ enum
  * GLOBAL VARIABLES
  ***************************************************************************/
 int EEPROM_AddressPointer;         // Points to next memory location to write to
-
+/*
 struct MyObject {                  // EEPROM.put() test structure 
   float field1;
   byte field2;
   char name[10];
 };
-
+*/
 
 
 /***************************************************************************
@@ -167,35 +152,33 @@ void displaySensorDetails(void)
 
 
 /*!
- * @brief Store temperture (degrees Celsius), Pressure (kPa), and altitude (m) in 1 KB EEPROM.
+ * @brief Store temperture (degrees Celsius) and Pressure (hPa)in 1 KB EEPROM.
  * 
- * @details Thhis functions can write upto 62 16-Byte pieces of data to the 1KB EEPROM every 
+ * @details Thhis functions can write upto 128 8-Byte pieces of data to the 1KB EEPROM every 
  * 100 seconds when using the Esplora, Nano, Pro Mini, and Uno Arduino products.
  * 
  * @see https://www.arduino.cc/en/Reference/EEPROMPut
  *
  * @param currentTemperature temperature reading from the BMP085 sensor in degreees C.
  * @param currentPressure pressure reading from the BMP085 sensor in hPa.
- * @param currentAltitude calcualted altitude in meters from adjusted sea level.
  * 
  * @return True if EEPROM has not overflowed - False otherwise
  */
-bool LogData(float currentTemperature, float currentPressure, float currentAltitude)
+bool LogData(float currentTemperature, float currentPressure)
 { 
   if (EEPROM_AddressPointer == EEPROM.length()) { // Memory pointer has overflowed
     if(DEBUG) Serial.println("ERROR! EEPROM full, please enter another quarter :)");
-    EEPROM.write(0, -1);         // Write -1 to EEMPROM address 0 to note overflow
+    float error = -1;
+    EEPROM.put(0, error);         // Write -1 to EEMPROM address 0 to note overflow
 
     return false;
   }  
 
   // Each float variable is 4 bytes long
   EEPROM.put(EEPROM_AddressPointer, currentTemperature);
-  EEPROM_AddressPointer = EEPROM_AddressPointer + 4;   
-  EEPROM.put(EEPROM_AddressPointer, currentPressure);
-  EEPROM_AddressPointer = EEPROM_AddressPointer + 4;  
-  EEPROM.put(EEPROM_AddressPointer, currentAltitude);
-  EEPROM_AddressPointer = EEPROM_AddressPointer + 4;  
+  EEPROM_AddressPointer += sizeof(float);  
+  EEPROM.put(EEPROM_AddressPointer, currentPressure/100.00);
+  EEPROM_AddressPointer += sizeof(float); 
 
   return true;
   
@@ -217,11 +200,11 @@ bool LogData(float currentTemperature, float currentPressure, float currentAltit
 void adjustThermalControlSystem(int currentTemperature)
 {
   if(currentTemperature < TARGET_MIN_TEMPERATURE){
-    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, HIGH);   // Turn ON MOSFET Q1 and heater
+    digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, HIGH);   // Turn ON MOSFET Q1 and heater
     delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low  
   }
   else{
-    digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
+    digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
     delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low     
   }//END ELSEIDF
   
@@ -243,10 +226,35 @@ void adjustThermalControlSystem(int currentTemperature)
  */
 void stopThermalControlSystem()
 {
-  digitalWrite(ESPLORA_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
+  digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
   
 }//END stopThermalControlSystem() FUNCTION
 
+/*!
+ * @brief Prints data in the 1KB EEPROM collected during flight.
+ *
+ * @details This functions reads and prints the 125 8-byte data pairs (temp & pressure)  
+ * stored by the logData function.
+ * 
+ * @see https://www.arduino.cc/en/Tutorial/EEPROMGet
+ * 
+ * @param NONE
+ *
+ * @return NOTHING
+ */
+void EEPROMGET(){
+  float f = 0.00f;   //Variable to store data read from EEPROM.
+  int eeAddress = 0; //EEPROM address to start reading from
+  
+  for (int i = 0; i < 128; i++){
+    EEPROM.get(eeAddress, f);
+    Serial.print("\nEEPROM ADDRESS #");
+    Serial.println(i);
+    Serial.print("EEPROM DATA = ");
+    Serial.println(f, 3);    //This may print 'ovf, nan' if the data inside the EEPROM is not a valid float.
+    eeAddress += sizeof(float); //Move address to the next byte after float 'f'.
+  }
+}
 
 /*!
  * @brief Caputure button pushes on an external hardware button.
@@ -263,23 +271,33 @@ void stopThermalControlSystem()
 int getProMiniButtonState(int pin)
 {
   bool buttonPressCaptured = false;
-  unsigned long ButtonDepressTimeMS = 100;
+  unsigned long ButtonDepressTimeMS = 666;
+  
+  while(!buttonPressCaptured){  
+    Serial.println(pin);
+     
+    if(digitalRead(pin) == LOW){             // Is button pressed? 
+      Serial.println("TEST");
+      //SW_Button.start();                     // Start button debounce and push length timer
 
-  while(!buttonPressCaptured){   
-    if(digitalRead(pin) == HIGH){             // Is button pressed? 
-      //SWarray[0].start();                     // Start button debounce and push length timer
-
-      while(digitalRead(pin) == HIGH){        // Is button still pressed?
+      while(digitalRead(pin) == LOW){        // Is button still pressed?
         delay(BUTTON_DEPRESS_MS_RESOLUTION);  // Software button debounce ~10 ms
-        //ButtonDepressTimeMS = SWarray[0].elapsed();  // Timer to deterime short vs long button press
+        //ButtonDepressTimeMS = SW_Button.elapsed();  // Timer to deterime short vs long button press 
       }//END INNER WHILE LOOP     
 
-      if(ButtonDepressTimeMS > 2000){         
+      if(DEBUG){
+        Serial.print("Button was pressed for the following number of millseconds: ");
+        Serial.println(ButtonDepressTimeMS);
+      }
+        
+      if(ButtonDepressTimeMS > 5000){         
         buttonPressCaptured = true;          // Long button press
+        if(DEBUG) Serial.print("LONG button press occurred.");
         return LONG_BUTTON_PRESS;   
       } 
-      else if(BUTTON_DEPRESS_MS_RESOLUTION < ButtonDepressTimeMS && ButtonDepressTimeMS <= 2000 ){
+      else if(ButtonDepressTimeMS <= 2000 ){  //BUTTON_DEPRESS_MS_RESOLUTION < ButtonDepressTimeMS &&
         buttonPressCaptured = true;         // Short button press
+        if(DEBUG) Serial.print("SHORT button press occurred.");
         return SHORT_BUTTON_PRESS;   
       }
       else{
@@ -293,16 +311,16 @@ int getProMiniButtonState(int pin)
 
   switch(pin){
     case PRO_MINI_BUTTON_1_PIN:
-      Serial.println("Please push button 1 to begin cut down timer.");
+      Serial.println("Push button #1 to start thermal control system and data logging.");
       break;
     case PRO_MINI_BUTTON_2_PIN:
-      Serial.println("Please push button 2 to begin data logging.");
+      Serial.println("Push button #2 and hold for 3 seconds to stop thermal control system and data logging,");
       break;
     case PRO_MINI_BUTTON_3_PIN:
-      Serial.println("Please push button 3 to start thermal control system.");
+      Serial.println("Undefined button.");
       break;
     case PRO_MINI_BUTTON_4_PIN:
-      Serial.println("Please push button 4 to stop thermal control system.");
+      Serial.println("Undefined button.");
       break;
     default:
       Serial.println("ERROR! Invalid hardware pin passed to getButtonState() function.");
@@ -387,29 +405,38 @@ void unitTestBMP085(void)
   float f = 123.456f;  //Variable to store in EEPROM.
   int eeAddress = 0;   //Location we want the data to be put.
 
-
   //One simple call, with the address first and the object second.
   EEPROM.put(eeAddress, f);
 
   Serial.println("Written float data type!");
 
   /** Put is designed for use with custom structures also. **/
-
+/*
   //Data to store.
   MyObject customVar = {
     3.14f,
     65,
     "Working!"
   };
-
+*/
   eeAddress += sizeof(float); //Move address to the next byte after float 'f'.
 
-  EEPROM.put(eeAddress, customVar);
+  //EEPROM.put(eeAddress, customVar);
   Serial.print("Custom data type written! \nView the example sketch eeprom_get to see how you can retrieve the values! \n\n");
-
+  /*
+  //MAIN LOOP test data logging too many data points into EEPROM 150 > 127
+  for (int i = 0; i < 150; i++){
+    bmp.getTemperature(&currentTemperature);
+    bmp.getPressure(&currentPressure);
+    ok &= LogData(currentTemperature, currentPressure); 
+    Serial.print("Loop #");
+    Serial.println(i);
+    delay(250);
+  }//END FOR LOOP
+  */ 
+   
 }//END unitTest() FUNCTION
 
- 
 /*!
  * @brief Configure the general purpose the input and output pins. 
  * 
@@ -424,37 +451,32 @@ void unitTestBMP085(void)
 void selectHardwareConfiguration(int arduinoBoardName)
 {
   switch(arduinoBoardName){
-    case ESPLORA: //BUTTON_1_PIN:
-      if (DEBUG) Serial.println("Arduino Esplora selected.");
-      pinMode(ESPLORA_CUTDOWN_PIN, OUTPUT);  
-      pinMode(ESPLORA_HEATSINK_HEATER_PIN, OUTPUT);
-      break;
     case PRO_MINI: //BUTTON_2_PIN:
       if (DEBUG) Serial.println("Arduino Pro Mini selected.");
       pinMode(PRO_MINI_CUTDOWN_PIN, OUTPUT);
-      pinMode(PRO_MINI_BUTTON_1_PIN, INPUT);
-      pinMode(PRO_MINI_BUTTON_2_PIN, INPUT);
-      pinMode(PRO_MINI_BUTTON_3_PIN, INPUT);
-      pinMode(PRO_MINI_BUTTON_4_PIN, INPUT);
+      pinMode(PRO_MINI_BUTTON_1_PIN, INPUT_PULLUP);
+      pinMode(PRO_MINI_BUTTON_2_PIN, INPUT_PULLUP);
+      pinMode(PRO_MINI_BUTTON_3_PIN, INPUT_PULLUP);
+      pinMode(PRO_MINI_BUTTON_4_PIN, INPUT_PULLUP);
       pinMode(PRO_MINI_YELLOW_LED, OUTPUT);
       pinMode(PRO_MINI_HEATSINK_HEATER_PIN, OUTPUT);
       break;
     case NANO: //BUTTON_3_PIN:
       if (DEBUG) Serial.println("Arduino Nano selected.");
       pinMode(NANO_CUTDOWN_PIN, OUTPUT);
-      pinMode(NANO_BUTTON_1_PIN, INPUT);
-      pinMode(NANO_BUTTON_2_PIN, INPUT);
-      pinMode(NANO_BUTTON_3_PIN, INPUT);
-      pinMode(NANO_BUTTON_4_PIN, INPUT);
+      pinMode(NANO_BUTTON_1_PIN, INPUT_PULLUP);
+      pinMode(NANO_BUTTON_2_PIN, INPUT_PULLUP);
+      pinMode(NANO_BUTTON_3_PIN, INPUT_PULLUP);
+      pinMode(NANO_BUTTON_4_PIN, INPUT_PULLUP);
       pinMode(NANO_HEATSINK_HEATER_PIN, OUTPUT);
       break;
     case UNO: //BUTTON_4_PIN:
       if (DEBUG) Serial.println("Arduino Uno selected.");
       pinMode(UNO_CUTDOWN_PIN, OUTPUT);
-      pinMode(UNO_BUTTON_1_PIN, INPUT);
-      pinMode(UNO_BUTTON_2_PIN, INPUT);
-      pinMode(UNO_BUTTON_3_PIN, INPUT);
-      pinMode(UNO_BUTTON_4_PIN, INPUT);
+      pinMode(UNO_BUTTON_1_PIN, INPUT_PULLUP);
+      pinMode(UNO_BUTTON_2_PIN, INPUT_PULLUP);
+      pinMode(UNO_BUTTON_3_PIN, INPUT_PULLUP);
+      pinMode(UNO_BUTTON_4_PIN, INPUT_PULLUP);
       pinMode(UNO_HEATSINK_HEATER_PIN, OUTPUT);
       break;
     default:
@@ -475,12 +497,9 @@ void setup(void)
   delay(100);
   while (!Serial);
   
-  selectHardwareConfiguration(PRO_MINI); //selectHardwareConfiguration(ESPLORA);   //selectHardwareConfiguration(NANO);
+  selectHardwareConfiguration(PRO_MINI); 
   
   EEPROM_AddressPointer = 0;  // Initialize global variable
-  
-  displaySensorDetails();
-
   
   /* Initialise the sensor */
   if(!bmp.begin()){
@@ -490,6 +509,7 @@ void setup(void)
   }
   /* Display some basic information on this sensor */
 
+  displaySensorDetails();
   
 }//END setup() FUNCTION
 
@@ -504,10 +524,12 @@ void loop(void)
 
   /* Get a new sensor event */
   sensors_event_t event;
-  //bmp.getEvent(&event);  
+  bmp.getEvent(&event);  
   float currentTemperature, currentPressure, currentAltitude;
   bool ok = true;                       // System status flag
-
+  bool systemOn = true;
+  
+  
   if(DEBUG){
     Serial.println("Overview One BMP085 Sensor Connection Test STARTING. \n"); 
     unitTestBMP085();
@@ -515,62 +537,56 @@ void loop(void)
     delay(1000);
   }
 
-  Serial.println("Push Button 1 to start cutdown timer.");
-  Serial.println("Push Button 2 to start data logging.");
-  Serial.println("Push button 3 to start thermal control system.");
-  Serial.println("Push button 4 to stop thermal control system and data logging.");
-  
-  //START DATA LOGGING
-  if(getProMiniButtonState(PRO_MINI_BUTTON_2_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 2 is pressed !Esplora.readButton(SWITCH_2)){ 
-    bmp.getTemperature(&currentTemperature);
-    bmp.getPressure(&currentPressure);
-    currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
-    ok &= LogData(currentTemperature, currentPressure, currentAltitude); 
-  }//END IF
-  
-  //START THERMAL CONTROL SYSTEM AND CONTINUE LOGGING DATA EVERY 100 SECONDS
-  if(getProMiniButtonState(PRO_MINI_BUTTON_3_PIN) == SHORT_BUTTON_PRESS){ // //Loops until button 3 is pressed  !Esplora.readButton(SWITCH_3))
-
-    while(currentAltitude < 30480){ // 30.48 m = 100,000 feet
-      // Loop every 100 seconds until timer reaches set cut down time 
+  Serial.println("Push button #1 to start thermal control system and data logging.");
+  Serial.println("Push button #2 and hold for 3 seconds to stop thermal control system and data logging.\n\n");
+ /* 
+  //START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS
+  //if(getProMiniButtonState(PRO_MINI_BUTTON_1_PIN)){  //== SHORT_BUTTON_PRESS
+    
+    while(systemOn){ 
+      // Loop every 100 seconds until button #1 is pressed again
       // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
+      if (DEBUG) Serial.println("START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS.");
       
       bmp.getTemperature(&currentTemperature);
-      bmp.getPressure(&currentPressure);
-      currentAltitude = bmp.pressureToAltitude(SEA_LEVEL_PRESSURE, event.pressure);
-      
+      bmp.getPressure(&currentPressure);     
       adjustThermalControlSystem(currentTemperature);
-      ok &= LogData(currentTemperature, currentPressure, currentAltitude);  
+      ok &= LogData(currentTemperature, currentPressure);  
     
       // Pause 100 seconds for data logging, but update thermal control system every 1 second
       for (int sec = 0; sec < 100; sec++){
         delay(1000); 
         bmp.getTemperature(&currentTemperature);
         adjustThermalControlSystem(currentTemperature);
-      }//END FOR LOOP
-    
-    }//END WHILE LOOP #1
+        if (DEBUG) Serial.println(" THERMAL CONTROL SYSTEM ADJUSTED.");
+        
+        if(digitalRead(PRO_MINI_BUTTON_2_PIN) == LOW){
+            if (DEBUG) Serial.println("STOP THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS.");                  
+            stopThermalControlSystem(); 
+            systemOn = false;  
+        }//END DIGITAL READ IF
+      
+     }//END FOR LOOP
+     
+   }//END OUTER WHILE LOOP
        
-  }//END IF
-
-  //waitForNextEsploraButton(SWITCH_3);  
-  if(getProMiniButtonState(PRO_MINI_BUTTON_4_PIN) == SHORT_BUTTON_PRESS){ //Loops until button 4 is pressed !Esplora.readButton(SWITCH_4)){ 
-    stopThermalControlSystem();  
-  }
-  
+  //}//END IF
+ 
   delay(5000);
   
   //Status LED at end of flight 
   if(ok){
     if (DEBUG) Serial.println("GOOD TO GO");
-    digitalWrite(PRO_MINI_YELLOW_LED,HIGH); //Esplora.writeRGB(0, 255, 0); //Turn RGB LED ON and make green   
+    digitalWrite(PRO_MINI_YELLOW_LED,HIGH);   
   }
   else{
     if (DEBUG) Serial.println("HARDWARE ERORR");
-    digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, HIGH); // Esplora.writeRGB(255, 0, 0); //Turn RGB LED ON and make red   
+    digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, HIGH);  
   }
   
-  delay(10000);
+  delay(2000);
 
+  EEPROMGET();
+*/  
 }//END MAIN LOOP
 
