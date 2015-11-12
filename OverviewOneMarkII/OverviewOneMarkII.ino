@@ -3,7 +3,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085_U.h>
 
-
 /* This driver assumes you are using the Arduino Pro Mini 3.3V wired as follows:
  * https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
  *  
@@ -76,12 +75,12 @@ enum
   UNO_BUTTON_4_PIN = 8,
   UNO_HEATSINK_HEATER_PIN = 9,
   
-  PRO_MINI_CUTDOWN_PIN = 2,         //D2 
-  PRO_MINI_BUTTON_1_PIN = 5,        //D5
-  PRO_MINI_BUTTON_2_PIN = 6,        //D6
-  PRO_MINI_BUTTON_3_PIN = 7,        //D7
-  PRO_MINI_BUTTON_4_PIN = 8,        //D8
-  PRO_MINI_HEATSINK_HEATER_PIN = 9, //D9
+  PRO_MINI_CUTDOWN_PIN = 2,          
+  PRO_MINI_BUTTON_1_PIN = 5,        
+  PRO_MINI_BUTTON_2_PIN = 6,        
+  PRO_MINI_BUTTON_3_PIN = 7,        
+  PRO_MINI_BUTTON_4_PIN = 8,        
+  PRO_MINI_HEATSINK_HEATER_PIN = 9, 
   PRO_MINI_YELLOW_LED = 13,         //D13  
 
 }; //END ENUM 
@@ -97,7 +96,7 @@ enum
   BALLOON_HY_1600_75_000_FEET  = 4034,     // seconds
   BALLOON_HY_1600_X_50_000_FEET  = 2689,   // seconds
   SEA_LEVEL_PRESSURE = 1023,               // hPa 
-  TARGET_MIN_TEMPERATURE =  0              // degrees C   
+  TARGET_MIN_TEMPERATURE =  2              // degrees C   
 
 }; //END ENUM 
 
@@ -140,7 +139,7 @@ void displaySensorDetails(void)
   Serial.print(sensor.max_value); 
   Serial.println(" hPa");
   Serial.print  ("Min Value:    "); 
-  Serial.print(sensor.min_value); 
+  Serial.print(sensor.min_value);    //300 hPa = 9 km 0 C = not between 10 and 27 km
   Serial.println(" hPa");
   Serial.print  ("Resolution:   "); 
   Serial.print(sensor.resolution); 
@@ -152,7 +151,7 @@ void displaySensorDetails(void)
 
 
 /*!
- * @brief Store temperture (degrees Celsius) and Pressure (hPa)in 1 KB EEPROM.
+ * @brief Store temperature (degrees Celsius) and Pressure (hPa) into a 1 KB EEPROM.
  * 
  * @details Thhis functions can write upto 128 8-Byte pieces of data to the 1KB EEPROM every 
  * 100 seconds when using the Esplora, Nano, Pro Mini, and Uno Arduino products.
@@ -177,9 +176,9 @@ bool LogData(float currentTemperature, float currentPressure)
   // Each float variable is 4 bytes long
   EEPROM.put(EEPROM_AddressPointer, currentTemperature);
   EEPROM_AddressPointer += sizeof(float);  
-  EEPROM.put(EEPROM_AddressPointer, currentPressure/100.00);
+  EEPROM.put(EEPROM_AddressPointer, currentPressure/100.00); //Convert Pa to hPa by dividing 
   EEPROM_AddressPointer += sizeof(float); 
-  Serial.println("Log Data Successful");
+  Serial.println("EEPROM data logging was successful.");
   return true;
   
 }//END LogData() FUNCTION
@@ -199,37 +198,26 @@ bool LogData(float currentTemperature, float currentPressure)
  */
 void adjustThermalControlSystem(int currentTemperature)
 {
+  if (DEBUG) Serial.println("THERMAL CONTROL SYSTEM ADJUSTING.");
+  
   if(currentTemperature < TARGET_MIN_TEMPERATURE){
+    if (DEBUG) Serial.println("THERMAL SYSTEM ON.");
     digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, HIGH);   // Turn ON MOSFET Q1 and heater
     delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low  
   }
   else{
+    if (DEBUG) Serial.println("THERMAL SYSTEM OFF.");
     digitalWrite(PRO_MINI_HEATSINK_HEATER_PIN, LOW);   // Turn OFF MOSFET Q1 and allow heat sink to cool electronics
     delay(HYSTERSIS_DELAY);     //Hysteresis delay to stop thermal system from toggle high and low     
   }//END ELSEIDF
-  if (DEBUG) Serial.println(" THERMAL CONTROL SYSTEM ADJUSTING.");
+  
 }//END adjustThermalControlSystem() FUNCTION
-
-
-
-/*!
- * @brief Turn off heating capability of the thermal control system.
- * 
- * @details This functions turns off the N-channel Power MOSFET driver circuit to allow
- * the aluminium resistive element to act like a heat sink.
- * 
- * @see https://upverter.com/SolX2010/882c528eb42e3c1a/Balloon-Flight-1/ 
- * 
- * @param NONE
- * 
- * @return NOTHING
- */
 
 
 /*!
  * @brief Prints data in the 1KB EEPROM collected during flight.
  *
- * @details This functions reads and prints the 125 8-byte data pairs (temp & pressure)  
+ * @details This functions reads and prints the 128 8-byte data pairs (temp & pressure)  
  * stored by the logData function.
  * 
  * @see https://www.arduino.cc/en/Tutorial/EEPROMGet
@@ -242,7 +230,7 @@ void EEPROMGET(){
   float f = 0.00f;   //Variable to store data read from EEPROM.
   int eeAddress = 0; //EEPROM address to start reading from
   
-  for (int i = 0; i < 128; i++){
+  for (int i = 0; i <= 127; i++){
     EEPROM.get(eeAddress, f);
     Serial.print("\nEEPROM ADDRESS #");
     Serial.println(i);
@@ -346,6 +334,7 @@ void unitTestBMP085(void)
 
   //EEPROM.put(eeAddress, customVar);
   Serial.print("Custom data type written! \nView the example sketch eeprom_get to see how you can retrieve the values! \n\n");
+  
   /*
   //MAIN LOOP test data logging too many data points into EEPROM 150 > 127
   for (int i = 0; i < 150; i++){
@@ -359,6 +348,7 @@ void unitTestBMP085(void)
   */ 
    EEPROMGET();
 }//END unitTest() FUNCTION
+
 
 /*!
  * @brief Configure the general purpose the input and output pins. 
@@ -462,30 +452,22 @@ void loop(void)
 
   
   //START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS
-  
-    if (DEBUG) Serial.println("START THERMAL CONTROL SYSTEM AND LOGGING DATA EVERY 100 SECONDS.");
-    while(systemOn){ 
-      // Loop every 100 seconds until button #1 is pressed again
-      // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
+  if (DEBUG) Serial.println("START THERMAL CONTROL SYSTEM AND LOG DATA EVERY 100 SECONDS.");
+  while(systemOn){ 
+    // Loop every 100 seconds until button #1 is pressed again
+    // ADD STUFF TO DO WHILE IN FLIGHT TO THIS WHILE LOOP
+    bmp.getTemperature(&currentTemperature);
+    bmp.getPressure(&currentPressure);     
+    adjustThermalControlSystem(currentTemperature);
+    ok &= LogData(currentTemperature, currentPressure);  
       
-      
+    // Pause 100 seconds for data logging, but update thermal control system every 1 second
+    for (int sec = 0; sec < 100; sec++){
+      delay(1000); 
       bmp.getTemperature(&currentTemperature);
-      bmp.getPressure(&currentPressure);     
-      //adjustThermalControlSystem(currentTemperature);
-      ok &= LogData(currentTemperature, currentPressure);  
-      
-        
-    
-      // Pause 100 seconds for data logging, but update thermal control system every 1 second
-      for (int sec = 0; sec < 100; sec++){
-        delay(1000); 
-        bmp.getTemperature(&currentTemperature);
-        adjustThermalControlSystem(currentTemperature);
-        
-
-     }//END FOR LOOP
-     
-   }//END OUTER WHILE LOOP
+      adjustThermalControlSystem(currentTemperature);
+    }//END FOR LOOP
+  }//END OUTER WHILE LOOP
      
 }//END MAIN LOOP
 
